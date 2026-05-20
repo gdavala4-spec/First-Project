@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import CIMUpload from '@/components/CIMUpload';
 import { Sparkles } from 'lucide-react';
 

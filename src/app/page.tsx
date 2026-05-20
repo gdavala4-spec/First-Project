@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { query } from '@/lib/db';
 import type { Deal, CIM, Thesis, CallRecord } from '@/lib/types';
 import Link from 'next/link';

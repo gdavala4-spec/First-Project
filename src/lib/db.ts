@@ -1,24 +1,19 @@
-const PROJECT_ID = process.env.RECURSIV_PROJECT_ID!;
+import { Pool } from 'pg';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let r: any = null;
-
-async function getClient() {
-  if (!r) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Recursiv } = require('@recursiv/sdk');
-    r = new Recursiv();
-  }
-  return r;
-}
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+});
 
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  const client = await getClient();
-  const { data } = await client.databases.query({ project_id: PROJECT_ID, sql, params });
-  return (data?.rows ?? []) as T[];
+  const { rows } = await pool.query(sql, params);
+  return rows as T[];
 }
 
 export async function queryOne<T = Record<string, unknown>>(
@@ -30,7 +25,6 @@ export async function queryOne<T = Record<string, unknown>>(
 }
 
 export async function initDb(): Promise<void> {
-  const client = await getClient();
   const statements = [
     `CREATE TABLE IF NOT EXISTS deals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,6 +97,6 @@ export async function initDb(): Promise<void> {
     )`,
   ];
   for (const sql of statements) {
-    await client.databases.query({ project_id: PROJECT_ID, sql, params: [] });
+    await pool.query(sql);
   }
 }
