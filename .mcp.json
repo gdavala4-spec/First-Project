@@ -1,10 +1,7 @@
 {
   "mcpServers": {
     "recursiv": {
-      "command": "recursiv-mcp",
-      "env": {
-        "RECURSIV_API_KEY": "sk_live_IUKiYAFKttR1C_7Q0z617hxu"
-      }
+      "command": "recursiv-mcp"
     }
   }
 }

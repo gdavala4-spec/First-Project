@@ -1,19 +1,37 @@
-import { Pool } from 'pg';
+import 'server-only';
+import { getSdk } from './recursiv';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 30000,
-});
+const PROJECT_ID = process.env.RECURSIV_PROJECT_ID;
+const DB_NAME = 'crm-db';
+
+if (!PROJECT_ID) {
+  // eslint-disable-next-line no-console
+  console.warn('[db] RECURSIV_PROJECT_ID is not set. Database calls will fail.');
+}
+
+let _ensured = false;
+
+async function ensureDb(): Promise<void> {
+  if (_ensured) return;
+  if (!PROJECT_ID) throw new Error('RECURSIV_PROJECT_ID env var is not set.');
+  const r = getSdk();
+  await r.databases.ensure({ project_id: PROJECT_ID, name: DB_NAME });
+  _ensured = true;
+}
 
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  const { rows } = await pool.query(sql, params);
-  return rows as T[];
+  await ensureDb();
+  const r = getSdk();
+  const { data } = await r.databases.query({
+    project_id: PROJECT_ID!,
+    database_name: DB_NAME,
+    sql,
+    params: params.length ? params : undefined,
+  });
+  return data.rows as T[];
 }
 
 export async function queryOne<T = Record<string, unknown>>(
@@ -25,6 +43,7 @@ export async function queryOne<T = Record<string, unknown>>(
 }
 
 export async function initDb(): Promise<void> {
+  await ensureDb();
   const statements = [
     `CREATE TABLE IF NOT EXISTS deals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,6 +116,6 @@ export async function initDb(): Promise<void> {
     )`,
   ];
   for (const sql of statements) {
-    await pool.query(sql);
+    await query(sql);
   }
 }
