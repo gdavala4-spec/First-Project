@@ -3,6 +3,12 @@ import type { Deal } from './types';
 
 const anthropic = new Anthropic();
 
+function extractJSON(text: string): string {
+  // Strip markdown code fences if present
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  return fenced ? fenced[1].trim() : text.trim();
+}
+
 export interface AILinkResult {
   deal_id: string;
   confidence: number;
@@ -60,7 +66,7 @@ Return ONLY the JSON array, no other text.`,
 
   const text = message.content[0].type === 'text' ? message.content[0].text : '[]';
   try {
-    return JSON.parse(text.trim()) as AILinkResult[];
+    return JSON.parse(extractJSON(text)) as AILinkResult[];
   } catch {
     return [];
   }
@@ -103,7 +109,7 @@ Return ONLY valid JSON, no other text.`,
   });
   const text = message.content[0].type === 'text' ? message.content[0].text : '{}';
   try {
-    return JSON.parse(text.trim()) as CallAnalysis;
+    return JSON.parse(extractJSON(text)) as CallAnalysis;
   } catch {
     return { summary: '', action_items: '', sentiment: '' };
   }

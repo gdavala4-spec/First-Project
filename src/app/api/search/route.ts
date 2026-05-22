@@ -11,26 +11,26 @@ export async function GET(req: NextRequest) {
   const [deals, notes, cims, theses, calls] = await Promise.all([
     query<{ id: string; name: string; company: string | null; description: string | null }>(
       `SELECT id, name, company, description FROM deals
-       WHERE name ILIKE $1 OR company ILIKE $1 OR description ILIKE $1 LIMIT 5`,
+       WHERE name LIKE $1 OR company LIKE $1 OR description LIKE $1 LIMIT 5`,
       [pattern]
     ),
     query<{ id: string; content: string; deal_id: string | null }>(
-      `SELECT id, content, deal_id FROM notes WHERE content ILIKE $1 LIMIT 5`,
+      `SELECT id, content, deal_id FROM notes WHERE content LIKE $1 LIMIT 5`,
       [pattern]
     ),
     query<{ id: string; filename: string; ai_summary: string | null; deal_id: string | null }>(
       `SELECT id, filename, ai_summary, deal_id FROM cims
-       WHERE filename ILIKE $1 OR ai_summary ILIKE $1 OR extracted_text ILIKE $1 LIMIT 5`,
+       WHERE filename LIKE $1 OR ai_summary LIKE $1 OR extracted_text LIKE $1 LIMIT 5`,
       [pattern]
     ),
     query<{ id: string; title: string; hypothesis: string | null }>(
       `SELECT id, title, hypothesis FROM theses
-       WHERE title ILIKE $1 OR hypothesis ILIKE $1 OR criteria ILIKE $1 OR content ILIKE $1 LIMIT 5`,
+       WHERE title LIKE $1 OR hypothesis LIKE $1 OR criteria LIKE $1 OR content LIKE $1 LIMIT 5`,
       [pattern]
     ),
     query<{ id: string; title: string; ai_summary: string | null; deal_id: string | null }>(
       `SELECT id, title, ai_summary, deal_id FROM calls
-       WHERE title ILIKE $1 OR transcript ILIKE $1 OR ai_summary ILIKE $1 LIMIT 5`,
+       WHERE title LIKE $1 OR transcript LIKE $1 OR ai_summary LIKE $1 LIMIT 5`,
       [pattern]
     ),
   ]);
