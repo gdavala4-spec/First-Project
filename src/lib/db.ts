@@ -1,37 +1,44 @@
 import 'server-only';
+import { Pool } from 'pg';
 import { getSdk } from './recursiv';
 
 const PROJECT_ID = process.env.RECURSIV_PROJECT_ID;
 const DB_NAME = 'crm-db';
 
-if (!PROJECT_ID) {
-  // eslint-disable-next-line no-console
-  console.warn('[db] RECURSIV_PROJECT_ID is not set. Database calls will fail.');
-}
+// Persist pool across Next.js hot reloads in development
+const g = global as unknown as { __pgPool?: Pool };
+let _pending: Promise<Pool> | null = null;
 
-let _ensured = false;
-
-async function ensureDb(): Promise<void> {
-  if (_ensured) return;
+async function buildPool(): Promise<Pool> {
   if (!PROJECT_ID) throw new Error('RECURSIV_PROJECT_ID env var is not set.');
+
   const r = getSdk();
   await r.databases.ensure({ project_id: PROJECT_ID, name: DB_NAME });
-  _ensured = true;
+  const { data: creds } = await r.databases.getCredentials({ project_id: PROJECT_ID, name: DB_NAME });
+
+  const pool = new Pool({ connectionString: creds.connection_string });
+  await migrate(pool);
+  return pool;
+}
+
+function getPool(): Promise<Pool> {
+  if (g.__pgPool) return Promise.resolve(g.__pgPool);
+  if (!_pending) {
+    _pending = buildPool().then((p) => {
+      g.__pgPool = p;
+      return p;
+    });
+  }
+  return _pending;
 }
 
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  await ensureDb();
-  const r = getSdk();
-  const { data } = await r.databases.query({
-    project_id: PROJECT_ID!,
-    database_name: DB_NAME,
-    sql,
-    params: params.length ? params : undefined,
-  });
-  return data.rows as T[];
+  const pool = await getPool();
+  const result = await pool.query(sql, params.length ? params : undefined);
+  return result.rows as T[];
 }
 
 export async function queryOne<T = Record<string, unknown>>(
@@ -42,9 +49,8 @@ export async function queryOne<T = Record<string, unknown>>(
   return rows[0] ?? null;
 }
 
-export async function initDb(): Promise<void> {
-  await ensureDb();
-  const statements = [
+async function migrate(pool: Pool): Promise<void> {
+  const stmts = [
     `CREATE TABLE IF NOT EXISTS deals (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
@@ -115,7 +121,7 @@ export async function initDb(): Promise<void> {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
   ];
-  for (const sql of statements) {
-    await query(sql);
+  for (const sql of stmts) {
+    await pool.query(sql);
   }
 }
