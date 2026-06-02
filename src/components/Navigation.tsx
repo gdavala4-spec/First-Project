@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, BookOpen, Upload, Phone, Search } from 'lucide-react';
+import { LayoutDashboard, Briefcase, BookOpen, Upload, Phone, Search, LogOut } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,7 +35,7 @@ export default function Navigation() {
           </Link>
         ))}
       </nav>
-      <div className="p-3 border-t border-zinc-800">
+      <div className="p-3 border-t border-zinc-800 space-y-0.5">
         <Link
           href="/search"
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -47,6 +47,13 @@ export default function Navigation() {
           <Search size={15} />
           Global Search
         </Link>
+        <a
+          href="/api/auth/signout"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+        >
+          <LogOut size={15} />
+          Sign Out
+        </a>
       </div>
     </aside>
   );
