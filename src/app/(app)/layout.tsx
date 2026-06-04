@@ -2,9 +2,9 @@ import Navigation from '@/components/Navigation';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-zinc-950">
       <Navigation />
-      <main className="flex-1 overflow-auto min-h-screen">{children}</main>
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }

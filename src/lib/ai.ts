@@ -1,110 +1,111 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Deal } from './types';
+import type { AILinkResult, Deal } from './types';
 
 const anthropic = new Anthropic();
+const MODEL = 'claude-sonnet-4-6';
 
-export interface AILinkResult {
-  deal_id: string;
-  confidence: number;
-  reason: string;
+export async function summarizeCIM(text: string): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: `You are a private equity analyst. Summarize the following CIM (Confidential Information Memorandum) in 3-5 concise paragraphs covering: business overview, financials, market opportunity, and key investment considerations.\n\nCIM TEXT:\n${text.slice(0, 8000)}`,
+      },
+    ],
+  });
+
+  const block = response.content[0];
+  if (block.type === 'text') return block.text;
+  return 'Unable to generate summary.';
 }
 
-export interface CallAnalysis {
-  summary: string;
-  action_items: string;
-  sentiment: string;
+export async function analyzeCallTranscript(
+  transcript: string
+): Promise<{ summary: string; action_items: string; sentiment: string }> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: `You are a private equity deal analyst. Analyze the following call transcript and return a JSON object with these fields:
+- summary: a 2-3 sentence summary of the call
+- action_items: a newline-separated list of action items from the call
+- sentiment: one of "positive", "neutral", or "negative" based on overall tone
+
+Respond ONLY with valid JSON, no markdown or extra text.
+
+TRANSCRIPT:
+${transcript.slice(0, 8000)}`,
+      },
+    ],
+  });
+
+  const block = response.content[0];
+  if (block.type !== 'text') {
+    return { summary: '', action_items: '', sentiment: 'neutral' };
+  }
+
+  try {
+    const parsed = JSON.parse(block.text);
+    return {
+      summary: String(parsed.summary ?? ''),
+      action_items: String(parsed.action_items ?? ''),
+      sentiment: String(parsed.sentiment ?? 'neutral'),
+    };
+  } catch {
+    return {
+      summary: block.text,
+      action_items: '',
+      sentiment: 'neutral',
+    };
+  }
 }
 
 export async function linkContentToDeals(
   content: string,
-  contentType: 'cim' | 'note' | 'call',
+  type: string,
   deals: Deal[]
 ): Promise<AILinkResult[]> {
-  if (!deals.length) return [];
+  if (deals.length === 0) return [];
 
   const dealList = deals
-    .map(
-      (d) =>
-        `- ID: ${d.id} | Name: ${d.name} | Company: ${d.company ?? 'N/A'} | Sector: ${d.sector ?? 'N/A'} | Stage: ${d.stage}`
-    )
+    .map((d) => `- ID: ${d.id}, Name: ${d.name}, Company: ${d.company}, Sector: ${d.sector ?? 'N/A'}`)
     .join('\n');
 
-  const contentLabel =
-    contentType === 'cim'
-      ? 'CIM (Confidential Information Memorandum)'
-      : contentType === 'call'
-      ? 'call transcript'
-      : 'note';
-
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+  const response = await anthropic.messages.create({
+    model: MODEL,
     max_tokens: 1024,
     messages: [
       {
         role: 'user',
-        content: `You are an investment analyst AI. Given the following ${contentLabel} content, identify which of the listed deals it most likely relates to.
+        content: `You are a private equity CRM assistant. Given the following ${type} content and list of deals, identify which deals this content is most relevant to. Return a JSON array of objects with fields: deal_id, confidence (0-1), reason.
 
 CONTENT:
-${content.slice(0, 3000)}
+${content.slice(0, 4000)}
 
-EXISTING DEALS:
+DEALS:
 ${dealList}
 
-Return a JSON array of matches (only include deals with confidence > 0.3):
-[{ "deal_id": "<uuid>", "confidence": 0.95, "reason": "Company name matches, same sector" }]
-
-Return ONLY the JSON array, no other text.`,
+Respond ONLY with a JSON array, no markdown or extra text. If no deals are relevant, return an empty array [].`,
       },
     ],
   });
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : '[]';
+  const block = response.content[0];
+  if (block.type !== 'text') return [];
+
   try {
-    return JSON.parse(text.trim()) as AILinkResult[];
+    const parsed = JSON.parse(block.text);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item) =>
+        typeof item.deal_id === 'string' &&
+        typeof item.confidence === 'number'
+    ) as AILinkResult[];
   } catch {
     return [];
-  }
-}
-
-export async function summarizeCIM(text: string): Promise<string> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 512,
-    messages: [
-      {
-        role: 'user',
-        content: `Summarize this CIM in 3-4 sentences for an investment analyst. Focus on: company overview, key financials, and investment highlights.\n\n${text.slice(0, 4000)}`,
-      },
-    ],
-  });
-  return message.content[0].type === 'text' ? message.content[0].text : '';
-}
-
-export async function analyzeCallTranscript(transcript: string): Promise<CallAnalysis> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: `Analyze this call transcript from an investment analyst's perspective. Return a JSON object with exactly these keys:
-{
-  "summary": "2-3 sentence summary of the call",
-  "action_items": "Bullet-pointed list of follow-up actions (use - for each)",
-  "sentiment": "positive | neutral | negative — with a one-sentence explanation"
-}
-
-TRANSCRIPT:
-${transcript.slice(0, 5000)}
-
-Return ONLY valid JSON, no other text.`,
-      },
-    ],
-  });
-  const text = message.content[0].type === 'text' ? message.content[0].text : '{}';
-  try {
-    return JSON.parse(text.trim()) as CallAnalysis;
-  } catch {
-    return { summary: '', action_items: '', sentiment: '' };
   }
 }

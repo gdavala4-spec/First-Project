@@ -2,42 +2,45 @@ import { createHmac } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-const COOKIE = 'crm_session';
-const SESSION_VALUE = 'authenticated';
+const COOKIE_NAME = 'crm_session';
 
-function sign(value: string): string {
-  const secret = process.env.SESSION_SECRET ?? 'dev-secret-change-in-production';
-  return createHmac('sha256', secret).update(value).digest('hex');
+function computeToken(): string {
+  const secret = process.env.SESSION_SECRET ?? 'default-secret';
+  return createHmac('sha256', secret).update('authenticated').digest('hex');
 }
 
 export function verifyPassword(password: string): boolean {
-  const appPassword = process.env.APP_PASSWORD;
-  if (!appPassword) return false;
-  return password === appPassword;
+  return password === process.env.APP_PASSWORD;
 }
 
 export async function createSession(): Promise<void> {
-  const token = sign(SESSION_VALUE);
-  (await cookies()).set(COOKIE, token, {
+  const token = computeToken();
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30,
     path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 }
 
 export async function getSession(): Promise<boolean> {
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return false;
-  return token === sign(SESSION_VALUE);
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get(COOKIE_NAME);
+  if (!cookie) return false;
+  const expected = computeToken();
+  return cookie.value === expected;
 }
 
 export async function requireSession(): Promise<void> {
   const valid = await getSession();
-  if (!valid) redirect('/sign-in');
+  if (!valid) {
+    redirect('/sign-in');
+  }
 }
 
 export async function clearSession(): Promise<void> {
-  (await cookies()).delete(COOKIE);
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
 }
